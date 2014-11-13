@@ -3,10 +3,10 @@ $allUpdates = $updateSession.CreateupdateSearcher().Search("IsInstalled=0 and Ty
 $recommendedUpdates = $allUpdates | ? { $_.AutoSelectOnWebSites }
 
 if ($recommendedUpdates.Count -eq 0) {
-	Write-Host "OK - no pending updates."
+	Write-Host "OK: no pending updates"
 	exit 0
 }
 else {
-	Write-Host "ALERT - "  (($recommendedUpdates).Title -Join "`n")
+	Write-Host "CRITICAL: "  (($recommendedUpdates).Title -Join "`n")
 	exit 3
 }
