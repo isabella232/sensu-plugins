@@ -22,6 +22,7 @@
 require 'rubygems' if RUBY_VERSION < '1.9.0'
 require 'sensu-plugin/check/cli'
 require 'snmp'
+require 'bigdecimal'
 
 class CheckSNMP < Sensu::Plugin::Check::CLI
   option :host,
@@ -55,12 +56,15 @@ class CheckSNMP < Sensu::Plugin::Check::CLI
 
   option :comparison,
          short: '-o comparison operator',
-         description: 'Operator used to compare data with warning/critial values. Can be set to "le" (<=), "ge" (>=).',
-         default: 'ge'
+         description: "Operator used to compare data with. Can be set to #{OPERATORS.inspect}",
+         default: '>=',
+         proc: ->(comparison) { (OPERATORS & [ comparison ]).first or raise "Invalid comparison: #{comparison}" }
 
   option :timeout,
          short: '-t timeout (seconds)',
          default: '1'
+
+  OPERATORS = %w(< <= > >= ==)
 
   def run
     begin
@@ -69,30 +73,35 @@ class CheckSNMP < Sensu::Plugin::Check::CLI
                                   version: config[:snmp_version].to_sym,
                                   timeout: config[:timeout].to_i)
       response = manager.get(["#{config[:objectid]}"])
+
+      response.each_varbind do |vb|
+        if config[:match]
+          if vb.value.to_s =~ /#{config[:match]}/
+            ok
+          else
+            critical "Value: #{vb.value} failed to match Pattern: #{config[:match]}"
+          end
+        else
+          comparison = config[:comparison]
+          warning_threshold = BigDecimal.new(config[:warning].to_s)
+          critical_threshold = BigDecimal.new(config[:critical].to_s)
+          value = BigDecimal.new(vb.value.to_s)
+
+          if value.send(comparison, critical_threshold)
+            critical "Critical state detected: #{vb.value} #{comparison} #{critical_threshold}"
+          elsif value.send(comparison, warning_threshold)
+            warning "Warning state detected: #{vb.value} #{comparison} #{warning_threshold}"
+          else
+            ok vb.value.to_s
+          end
+        end
+      end
     rescue SNMP::RequestTimeout
       unknown "#{config[:host]} not responding"
     rescue => e
       unknown "An unknown error occured: #{e.inspect}"
+    ensure
+      manager.close if (manager)
     end
-    operators = { 'le' => :<=, 'ge' => :>= }
-    symbol = operators[config[:comparison]]
-
-    response.each_varbind do |vb|
-      if config[:match]
-        if vb.value.to_s =~ /#{config[:match]}/
-          ok
-        else
-          critical "Value: #{vb.value} failed to match Pattern: #{config[:match]}"
-        end
-      else
-        critical 'Critical state detected' if "#{vb.value}".to_i.send(symbol, "#{config[:critical]}".to_i)
-        # #YELLOW
-        warning 'Warning state detected' if ("#{vb.value}".to_i.send(symbol, "#{config[:warning]}".to_i)) && !("#{vb.value}".to_i.send(symbol, "#{config[:critical]}".to_i)) # rubocop:disable LineLength
-        unless "#{vb.value}".to_i.send(symbol, "#{config[:warning]}".to_i)
-          ok 'All is well!'
-        end
-      end
-    end
-    manager.close
   end
 end
