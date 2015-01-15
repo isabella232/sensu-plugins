@@ -25,6 +25,8 @@ require 'snmp'
 require 'bigdecimal'
 
 class CheckSNMP < Sensu::Plugin::Check::CLI
+  OPERATORS = %w(< <= > >= == !=)
+
   option :host,
          short: '-h host',
          default: '127.0.0.1'
@@ -39,11 +41,11 @@ class CheckSNMP < Sensu::Plugin::Check::CLI
 
   option :warning,
          short: '-w warning',
-         default: '10'
+         required: true
 
   option :critical,
          short: '-c critical',
-         default: '20'
+         required: true
 
   option :match,
          short: '-m match',
@@ -63,8 +65,6 @@ class CheckSNMP < Sensu::Plugin::Check::CLI
   option :timeout,
          short: '-t timeout (seconds)',
          default: '1'
-
-  OPERATORS = %w(< <= > >= ==)
 
   def run
     begin
