@@ -58,7 +58,7 @@ class CheckApcUps < Sensu::Plugin::Check::CLI
          short: '-t timeout (seconds)',
          default: '1'
 
-  add_numeric_check :output_status,    2,                     "output status"
+  add_numeric_check :output_status,    2,                      "output status"
   add_numeric_check :capacity,         95..100,                "% battery capacity"
   add_numeric_check :current,          1..15,                  "output current (amps)"
   add_numeric_check :frequency_in,     59.9..60.1,             "input frequency"
@@ -69,7 +69,7 @@ class CheckApcUps < Sensu::Plugin::Check::CLI
   add_numeric_check :battery_status,   2,                      "battery status"
   add_numeric_check :replace_battery,  1,                      "battery replacement indicator"
   add_numeric_check :internal_temp,    20..35,                 "internal temperature (celsius)"
-  add_numeric_check :external_temp,    20..27,                 "external temperature (celsius)"
+  add_numeric_check :external_temp,    20..30,                 "external temperature (celsius)"
   add_numeric_check :voltage_in,       119..121,               "input voltage (volts)"
   add_numeric_check :voltage_out,      119..120,               "output voltage (volts)"
 
