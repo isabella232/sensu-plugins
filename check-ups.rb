@@ -5,41 +5,50 @@ require 'snmp'
 require 'bigdecimal'
 
 class CheckApcUps < Sensu::Plugin::Check::CLI
-  OIDS = {
-    output_status:     "1.3.6.1.4.1.318.1.1.1.4.1.1.0",
-    capacity:          "1.3.6.1.4.1.318.1.1.1.2.2.1.0",
-    current:           "1.3.6.1.4.1.318.1.1.1.4.2.4.0",
-    frequency_in:      "1.3.6.1.4.1.318.1.1.1.3.2.4.0",
-    frequency_out:     "1.3.6.1.4.1.318.1.1.1.4.2.2.0",
-    last_test_result:  "1.3.6.1.4.1.318.1.1.1.7.2.3.0",
-    load:              "1.3.6.1.4.1.318.1.1.1.4.2.3.0",
-    runtime:           "1.3.6.1.4.1.318.1.1.1.2.2.3.0",
-    battery_status:    "1.3.6.1.4.1.318.1.1.1.2.1.1.0",
-    replace_battery:   "1.3.6.1.4.1.318.1.1.1.2.2.4.0",
-    internal_temp:     "1.3.6.1.4.1.318.1.1.1.2.2.2.0",
-    external_temp:     "1.3.6.1.4.1.318.1.1.25.1.2.1.6.2.1",
-    voltage_in:        "1.3.6.1.4.1.318.1.1.1.3.2.1.0",
-    voltage_out:       "1.3.6.1.4.1.318.1.1.1.4.2.1.0"
-  }
+  NumericCheck = Struct.new(:name, :default_expected_value, :oid) do
+    def check(snmp, config)
+      expected_value = config[name]
+      value = BigDecimal.new(snmp.get(oid).each_varbind.to_a[0].value.to_i)
+      expected_value.include?("..") ?
+          check_range(expected_value, value) :
+          check_value(expected_value, value)
+    end
 
-  def self.add_numeric_check(name, default_expected_range, desc)
-    self.option name,
-        long: "--#{name} #{desc} (default #{default_expected_range})",
-        default: default_expected_range.inspect
+    def check_value(expected_value, value)
+      expected_value = BigDecimal.new(expected_value)
+      expected_value == value ?
+          [ "#{name} of #{value.to_s("F")} is OK", nil ] :
+          [ nil, "expected #{name} of #{value.to_s("F")} to be #{expected_value.to_s("F")}" ]
+    end
 
-    (@@checks ||= []) << ->(snmp, config) do
-      config_value = config[name]
-      if (config[name] !~ /\.\./)
-        config_value = "#{config_value}..#{config_value}"
-      end
-      range = Range.new(*config_value.split("..").map(&BigDecimal.method(:new)))
-      value = BigDecimal.new(snmp.get(OIDS[name]).each_varbind.to_a[0].value.to_i)
+    def check_range(expected_value, value)
+      min, max = expected_value.split("..").map(&BigDecimal.method(:new))
+      Range.new(min, max).include?(value) ?
+          [ "#{name} of #{value.to_s("F")} is OK", nil ] :
+          [ nil, "expected #{name} of #{value.to_s("F")} to be in [#{min.to_s("F")}, #{max.to_s("F")}]" ]
+    end
 
-      unless (range.include?(value))
-        "expected #{name} of #{value} to be in the range #{range}"
-      end
+    def cmd_options
+      [ name, long: "--#{name} (default #{default_expected_value})", default: default_expected_value.inspect ]
     end
   end
+
+  CHECKS = [
+    NumericCheck.new(:output_status,    2,                      "1.3.6.1.4.1.318.1.1.1.4.1.1.0"),
+    NumericCheck.new(:capacity,         95..100,                "1.3.6.1.4.1.318.1.1.1.2.2.1.0"),
+    NumericCheck.new(:current,          1..15,                  "1.3.6.1.4.1.318.1.1.1.4.2.4.0"),
+    NumericCheck.new(:frequency_in,     58..62,                 "1.3.6.1.4.1.318.1.1.1.3.2.4.0"),
+    NumericCheck.new(:frequency_out,    58..62,                 "1.3.6.1.4.1.318.1.1.1.4.2.2.0"),
+    NumericCheck.new(:last_test_result, 1,                      "1.3.6.1.4.1.318.1.1.1.7.2.3.0"),
+    NumericCheck.new(:load,             10..60,                 "1.3.6.1.4.1.318.1.1.1.4.2.3.0"),
+    NumericCheck.new(:runtime,          60000..Float::INFINITY, "1.3.6.1.4.1.318.1.1.1.2.2.3.0"),
+    NumericCheck.new(:battery_status,   2,                      "1.3.6.1.4.1.318.1.1.1.2.1.1.0"),
+    NumericCheck.new(:replace_battery,  1,                      "1.3.6.1.4.1.318.1.1.1.2.2.4.0"),
+    NumericCheck.new(:internal_temp,    20..35,                 "1.3.6.1.4.1.318.1.1.1.2.2.2.0"),
+    NumericCheck.new(:external_temp,    20..30,                 "1.3.6.1.4.1.318.1.1.25.1.2.1.6.2.1"),
+    NumericCheck.new(:voltage_in,       119..121,               "1.3.6.1.4.1.318.1.1.1.3.2.1.0"),
+    NumericCheck.new(:voltage_out,      119..120,               "1.3.6.1.4.1.318.1.1.1.4.2.1.0"),
+  ]
 
   option :host,
          short: '-h host',
@@ -58,35 +67,22 @@ class CheckApcUps < Sensu::Plugin::Check::CLI
          short: '-t timeout (seconds)',
          default: '1'
 
-  add_numeric_check :output_status,    2,                      "output status"
-  add_numeric_check :capacity,         95..100,                "% battery capacity"
-  add_numeric_check :current,          1..15,                  "output current (amps)"
-  add_numeric_check :frequency_in,     59.9..60.1,             "input frequency"
-  add_numeric_check :frequency_out,    59.9..60.1,             "output frequency"
-  add_numeric_check :last_test_result, 1,                      "last self test result"
-  add_numeric_check :load,             10..60,                 "% load"
-  add_numeric_check :runtime,          60000..Float::INFINITY, "runtime centiseconds"
-  add_numeric_check :battery_status,   2,                      "battery status"
-  add_numeric_check :replace_battery,  1,                      "battery replacement indicator"
-  add_numeric_check :internal_temp,    20..35,                 "internal temperature (celsius)"
-  add_numeric_check :external_temp,    20..30,                 "external temperature (celsius)"
-  add_numeric_check :voltage_in,       119..121,               "input voltage (volts)"
-  add_numeric_check :voltage_out,      119..120,               "output voltage (volts)"
+  CHECKS.map { |check| option(*check.cmd_options) }
 
   def run
     begin
-      mgr = SNMP::Manager.new(
+      snmp = SNMP::Manager.new(
         host: config[:host],
         community: config[:community],
         version: config[:snmp_version].to_sym,
         timeout: config[:timeout].to_i
       )
 
-      errors = @@checks.map { |check| check.call(mgr, config) }.compact
-      critical errors * "\n" if (errors.any?)
-      ok
+      ok, critical = CHECKS.map { |check| check.check(snmp, config) }.transpose.map(&:compact)
+      self.critical(critical * "\n") if (critical.any?)
+      self.ok(ok * "\n")
     ensure
-      mgr.close
+      snmp.close
     end
   end
 end
