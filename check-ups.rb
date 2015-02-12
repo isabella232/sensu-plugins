@@ -45,7 +45,7 @@ class CheckApcUps < Sensu::Plugin::Check::CLI
     NumericCheck.new(:battery_status,   2,                      "1.3.6.1.4.1.318.1.1.1.2.1.1.0"),
     NumericCheck.new(:replace_battery,  1,                      "1.3.6.1.4.1.318.1.1.1.2.2.4.0"),
     NumericCheck.new(:internal_temp,    20..35,                 "1.3.6.1.4.1.318.1.1.1.2.2.2.0"),
-    NumericCheck.new(:external_temp,    20..30,                 "1.3.6.1.4.1.318.1.1.25.1.2.1.6.2.1"),
+    NumericCheck.new(:external_temp,    15..30,                 "1.3.6.1.4.1.318.1.1.25.1.2.1.6.2.1"),
     NumericCheck.new(:voltage_in,       110..130,               "1.3.6.1.4.1.318.1.1.1.3.2.1.0"),
     NumericCheck.new(:voltage_out,      119..121,               "1.3.6.1.4.1.318.1.1.1.4.2.1.0"),
   ]
